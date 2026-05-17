@@ -1,59 +1,48 @@
-use rmcp::{
-    ServerHandler, ServiceExt,
-    handler::server::{router::tool::ToolRouter, tool::Parameters},
-    model::*,
-    schemars, tool, tool_handler, tool_router,
-};
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
-use std::process::Command;
-
-async fn main() -> Result<(), Box,dyn std::error::Error>> {
-    let service = McpServer::new().serve(sttdio()).await.inspect_err(|e| {
-        println!({"{e}"});
-    })?;
-
-    service.waiting().await?;
-
-    Ok(())
-}
+use rmcp::{handler::server::tool::{ToolRouter}, model::{CallToolResult, Content, Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerInfo}, tool, tool_handler, tool_router, ServerHandler};
+use rmcp::ErrorData as McpError;
 
 
-// Structs for args that will be paste into server
-#[derive(Deserialize, JsonSChema, Serialize)]
-struct ScanArgs {
-    #[validate(description = "Path to project")]
-    projectPath: String,
-    #[validate(description = "Programming Language")]
-    programmingLanguage: String,
-}
-
+// Struct for tools and tool router
 #[derive(Clone)]
-pub struct McpServer {
-    tool_router: ToolRouter<Self>,
+pub struct SecurityMcpServer {
+    tool_router: ToolRouter<Self>
 }
 
+// tools
 #[tool_router]
-impl McpServer {
+impl SecurityMcpServer {
+    // Tool router inicialization
     pub fn new() -> Self {
         Self {
-            tool_router: Self::tool_router(),
+            tool_router: Self::tool_router()
         }
-    }
-    #[tool(description = "Scan code based on the language")]
-    async fn scan_code(&self, Parameters(args): Parameters<ScanArgs>) -> String {
-        format!("Scanning project: {}, language {}", args.path);
-        let python_result = scan_bandit();
     }
 }
 
 
+// tool handler which provides information for LLM
 #[tool_handler]
-impl ServerHandler for McpServer {
-    fn get_info(&self) -> ServerInfo {
+impl ServerHandler for SecurityMcpServer {
+    fn get_info(&self) -> rmcp::model::ServerInfo {
         ServerInfo {
-            capabilites: ServerCapabilities::builder().enable_tools().build(),
-            ..Default::default()
+            protocol_version: ProtocolVersion::V_2025_06_18,
+            capabilities: ServerCapabilities::builder()
+                .enable_tools() // Shows enable tools
+                .build(),
+            server_info: Implementation::from_build_env(), // Infor on the MCP from the build_env
+            instructions: Some( // Instructions sent back to the MCP client - system prompt
+            "I will scan your code in order to find any vulnerabilities.
+            
+            
+            Available actions: ".to_string()),
         }
+    }
+    // Initialization
+    async fn initialize(
+        &self,
+        _request: rmcp::model::InitializeRequestParam,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<InitializeResult, McpError> {
+        Ok(self.get_info())
     }
 }
