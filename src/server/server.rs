@@ -1,6 +1,16 @@
-use rmcp::{handler::server::tool::{ToolRouter}, model::{CallToolResult, Content, Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerInfo}, tool, tool_handler, tool_router, ServerHandler};
+use rmcp::{ServerHandler, handler::server::{tool::ToolRouter, wrapper::Parameters}, model::{CallToolResult, Content, Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerInfo}, tool, tool_handler, tool_router, schemars};
 use rmcp::ErrorData as McpError;
+use serde::Deserialize;
 
+// import tools modules
+use crate::tools::bandit::BanditOutput;
+
+
+// Structs for parametrs
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ScanParams {
+    path: String,
+}
 
 // Struct for tools and tool router
 #[derive(Clone)]
@@ -17,6 +27,24 @@ impl SecurityMcpServer {
             tool_router: Self::tool_router()
         }
     }
+
+
+    // bandit python scanner
+    #[tool(description = "Scan python code using Bandit")]
+    async fn scan_python_bandit(&self, params: Parameters<ScanParams>) -> Result<CallToolResult, McpError> {
+        let path = params.0.path;
+        let result = BanditOutput::run_bandit(&path)
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        // Switch result to json because Content::text dont know how to interpret object BanditOutput to text
+        let result_json = serde_json::to_string_pretty(&result)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(result_json)]))
+    }
+    
+    // cargo rust scanner
 }
 
 

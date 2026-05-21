@@ -1,5 +1,6 @@
 // modules
 mod server;
+mod tools;
 
 
 use anyhow::Result;
