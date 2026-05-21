@@ -1,4 +1,4 @@
-use std::process::Command;
+use tokio::process::Command;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +41,7 @@ impl BanditOutput {
         let output = Command::new("bandit")
             .args(["-r", path, "-f", "json"])
             .output()
+            .await
             .context("Failed to run bandit")?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);

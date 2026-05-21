@@ -3,7 +3,7 @@ use rmcp::ErrorData as McpError;
 use serde::Deserialize;
 
 // import tools modules
-use crate::tools::bandit::BanditOutput;
+use crate::tools::{bandit::BanditOutput, cargo_audit::CargoAuditOutput};
 
 
 // Structs for parametrs
@@ -30,7 +30,7 @@ impl SecurityMcpServer {
 
 
     // bandit python scanner
-    #[tool(description = "Scan python code using Bandit")]
+    #[tool(description = "Scan python code")]
     async fn scan_python_bandit(&self, params: Parameters<ScanParams>) -> Result<CallToolResult, McpError> {
         let path = params.0.path;
         let result = BanditOutput::run_bandit(&path)
@@ -45,6 +45,19 @@ impl SecurityMcpServer {
     }
     
     // cargo rust scanner
+    #[tool(description = "Scan rust code")]
+    async fn scan_cargo_audit(&self, params: Parameters<ScanParams>) -> Result<CallToolResult, McpError> {
+        let path = params.0.path;
+        let result = CargoAuditOutput::run_cargo_audit(&path)
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        // Switch result to json because Content::text dont know how to interpret object CargoAuditOutput to text
+        let result_json = serde_json::to_string_pretty(&result)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(result_json)]))
+    }
 }
 
 
