@@ -1,5 +1,4 @@
 use std::{env, path::Path, process::Stdio, time::Duration};
-
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,24 +20,21 @@ struct Vulnerabilities {
 
 impl CargoAuditOutput {
     // cargo audit run
-    pub async fn run_cargo_audit(path: &str) -> Result<Self, anyhow::Error> {
-        // change to path
-        let scan_path = Path::new(path);
-
+    pub async fn run_cargo_audit(path: &Path) -> Result<Self, anyhow::Error> {
         // output running command
         let output = Command::new("cargo")
             .args(["audit", "--json"])
-            .current_dir(&scan_path)
+            .current_dir(path)
             .stdin(Stdio::null()) // This line is critical otherwise process will inheret stdin and claude will not be able to communicate with MCP
             .kill_on_drop(true) 
             .output()
             .await
-            .context("Failed to run cargo audit")?;
+            .with_context(|| format!("Failed to run cargo clippy in {}", path.display()))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        // check if result is stdout is empty
+        // check if result stdout is empty
         if stdout.trim().is_empty() {
             anyhow::bail!("cargo audit returned empty result. stderr: {}", stderr);
         }

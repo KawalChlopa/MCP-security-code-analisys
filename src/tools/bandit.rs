@@ -39,7 +39,7 @@ struct IssueCwe {
 
 impl BanditOutput {
     // Run bandit function
-    pub async fn run_bandit(path: &str) -> Result<Self, anyhow::Error> {
+    pub async fn run_bandit(path: &Path) -> Result<Self, anyhow::Error> {
         let python = env::var("BANDIT_PYTHON").unwrap_or_else(|_| "python".to_owned());
         let timeout_duration = bandit_timeout();
         let mut cmd = Command::new(&python);
@@ -47,30 +47,27 @@ impl BanditOutput {
         cmd.stdin(Stdio::null());
         cmd.kill_on_drop(true);
 
-        // Change to Path
-        let scan_path = Path::new(path);
-
         // We want to check if file or dir exists
-        if !scan_path.exists() {
-            anyhow::bail!("Path does not exist: {}", path);
+        if !path.exists() {
+            anyhow::bail!("Path does not exist: {}", path.display());
         }
 
-        if scan_path.is_dir() {
+        if path.is_dir() {
             cmd.arg("-r");
         }
 
-        tracing::debug!(path, python, "starting Bandit scan");
+        tracing::debug!(path=%path.display(), python, "starting Bandit scan");
 
         let output = timeout(
             timeout_duration,
-            cmd.arg(scan_path).args(["-f", "json"]).output(),
+            cmd.arg(path).args(["-f", "json"]).output(),
         )
         .await
         .map_err(|_| {
             anyhow!(
                 "Bandit scan timed out after {} seconds for path: {}",
                 timeout_duration.as_secs(),
-                path
+                path.display()
             )
         })?
         .with_context(|| {
@@ -79,7 +76,7 @@ impl BanditOutput {
             )
         })?;
 
-        tracing::debug!(path, "Bandit scan finished");
+        tracing::debug!(path=%path.display(), "Bandit scan finished");
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 

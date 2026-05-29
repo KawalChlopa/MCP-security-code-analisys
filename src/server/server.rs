@@ -8,10 +8,20 @@ use rmcp::{
     },
     schemars, tool, tool_handler, tool_router,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+
+// struct for scan rust files results
+#[derive(Serialize)]
+struct ScanRustResult {
+    cargo_audit_output: CargoAuditOutput,
+    cargo_clippy_output: CargoClippyOutput,
+}
+
 
 // import tools modules
-use crate::tools::{bandit::BanditOutput, cargo_audit::CargoAuditOutput};
+use crate::tools::{bandit::BanditOutput, cargo_audit::CargoAuditOutput, cargo_clippy::CargoClippyOutput};
 
 // Structs for parametrs
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -22,6 +32,8 @@ pub struct ScanParams {
 // Struct for tools and tool router
 #[derive(Clone)]
 pub struct SecurityMcpServer {
+    // Problem with warning, tool router is used by macro, but dead code analisys take place before makros expansion
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
@@ -41,11 +53,11 @@ impl SecurityMcpServer {
         &self,
         params: Parameters<ScanParams>,
     ) -> Result<CallToolResult, McpError> {
-        let path = params.0.path;
+        let path = Path::new(&params.0.path);
 
-        tracing::info!(path, "starting Bandit tool call");
+        tracing::info!(path = %path.display(), "starting Bandit tool call");
 
-        let result = BanditOutput::run_bandit(&path)
+        let result = BanditOutput::run_bandit(path)
             .await
             .map_err(|e| McpError::internal_error(format!("{e:#}"), None))?;
 
@@ -62,13 +74,26 @@ impl SecurityMcpServer {
         &self,
         params: Parameters<ScanParams>,
     ) -> Result<CallToolResult, McpError> {
-        let path = params.0.path;
-        let result = CargoAuditOutput::run_cargo_audit(&path)
+        let path = Path::new(&params.0.path);
+
+        // Cargo Audit Scan
+        let cargo_audit_output = CargoAuditOutput::run_cargo_audit(path)
             .await
             .map_err(|e| McpError::internal_error(format!("{e:#}"), None))?;
 
+        // Cargo Clippy Scan
+        let cargo_clippy_output = CargoClippyOutput::run_cargo_clippy(path)
+            .await
+            .map_err(|e| McpError::internal_error(format!("{e:#}"), None))?;
+
+        // Create struct ScanRustResult
+        let scan_rust_result = ScanRustResult{
+            cargo_audit_output,
+            cargo_clippy_output,
+        };
+        
         // Switch result to json because Content::text dont know how to interpret object CargoAuditOutput to text
-        let result_json = serde_json::to_string_pretty(&result)
+        let result_json = serde_json::to_string_pretty(&scan_rust_result)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
         Ok(CallToolResult::success(vec![Content::text(result_json)]))
