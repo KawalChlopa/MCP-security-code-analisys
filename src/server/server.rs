@@ -71,7 +71,7 @@ impl SecurityMcpServer {
         // match proper action
         let result_json = match params.action.as_str() {
 
-            "fix" =>  helpers::handle_rust_fix(path)
+            "fix"  => helpers::handle_rust_fix(path)
                         .await
                         .map_err(|e| McpError::internal_error(e.to_string(), None))?,
 
@@ -79,9 +79,7 @@ impl SecurityMcpServer {
                         .await
                         .map_err(|e| McpError::internal_error(e.to_string(), None))?,
 
-            _      => {
-                return Err(McpError::invalid_params("Unknown action, Use action: fix or scan", None));
-            }
+            other  => return Err(McpError::invalid_params(format!("Unknown action {other}, Use action: fix or scan"), None)),
         };
 
         Ok(CallToolResult::success(vec![Content::text(result_json)]))
